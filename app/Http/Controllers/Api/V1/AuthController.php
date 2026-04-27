@@ -29,7 +29,6 @@ class AuthController extends Controller
             'last_name' => $validated['last_name'],
             'contact_number' => $validated['contact_number'],
             'address' => $validated['address'],
-            'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => $validated['email'],
             'password' => $validated['password'],
         ]);

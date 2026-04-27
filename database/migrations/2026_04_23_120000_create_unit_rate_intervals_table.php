@@ -10,19 +10,23 @@ return new class extends Migration
     {
         Schema::create('unit_rate_intervals', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('unit_id')->constrained()->cascadeOnDelete();
-            $table->string('name')->nullable();
-            $table->date('start_date');
-            $table->date('end_date');
-            $table->unsignedInteger('min_los')->nullable();
-            $table->unsignedInteger('max_los')->nullable();
-            $table->json('days_of_week');
-            $table->decimal('base_price', 10, 2)->default(0);
+            $table->unsignedBigInteger('user_id')->index();
+            $table->unsignedBigInteger('unit_id')->index();
+            $table->string('name')->nullable()->index();
+            $table->date('start_date')->index();
+            $table->date('end_date')->index();
+            $table->integer('min_los')->nullable();
+            $table->integer('max_los')->nullable();
+            $table->boolean('closed_to_arrival')->default(false);
+            $table->boolean('closed_to_departure')->default(false);
+            $table->json('day_prices')->nullable();
+            $table->json('days_of_week')->nullable();
+            $table->decimal('base_price', 12, 2)->default(0);
             $table->string('currency', 16)->default('PHP');
             $table->timestamps();
 
             $table->index(['unit_id', 'start_date']);
+            $table->index(['created_at', 'updated_at'], 'unit_rate_intervals_timestamp_index');
         });
     }
 
