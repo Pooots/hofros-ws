@@ -27,7 +27,11 @@ class TeamMember extends Model
                 'email' => $owner->email,
             ],
             [
-                'name' => $owner->name,
+                'name' => trim(implode(' ', array_filter([
+                    $owner->first_name,
+                    $owner->middle_name,
+                    $owner->last_name,
+                ]))),
                 'role' => 'admin',
             ],
         );

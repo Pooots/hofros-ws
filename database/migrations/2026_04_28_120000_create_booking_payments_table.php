@@ -10,16 +10,17 @@ return new class extends Migration
     {
         Schema::create('booking_payments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('booking_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('booking_id')->index();
+            $table->unsignedBigInteger('user_id')->index();
             $table->decimal('amount', 12, 2);
             $table->string('currency', 16);
-            $table->string('payment_type', 32);
+            $table->string('payment_type', 32)->index();
             $table->string('transaction_kind', 16)->default('payment');
             $table->text('notes')->nullable();
             $table->timestamps();
 
             $table->index(['booking_id', 'created_at']);
+            $table->index(['created_at', 'updated_at'], 'booking_payments_timestamp_index');
         });
     }
 

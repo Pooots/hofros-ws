@@ -10,12 +10,12 @@ return new class extends Migration
     {
         Schema::create('bookings', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('unit_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('user_id')->index();
+            $table->unsignedBigInteger('unit_id')->index();
             $table->string('reference', 40)->unique();
-            $table->string('guest_name');
-            $table->string('guest_email');
-            $table->string('guest_phone', 64);
+            $table->string('guest_name', 255)->nullable()->index();
+            $table->string('guest_email', 255)->nullable()->index();
+            $table->string('guest_phone', 64)->nullable();
             $table->date('check_in');
             $table->date('check_out');
             $table->unsignedSmallInteger('adults')->default(1);
@@ -25,10 +25,13 @@ return new class extends Migration
             $table->string('source', 32);
             $table->string('status', 32)->default('new_booking');
             $table->text('notes')->nullable();
+            $table->uuid('portal_batch_id')->nullable()->index();
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['user_id', 'status']);
             $table->index(['user_id', 'check_in']);
+            $table->index(['created_at', 'updated_at'], 'bookings_timestamp_index');
         });
     }
 
