@@ -22,7 +22,7 @@ class UserSeeder extends Seeder
             'contact_number' => '1234567890',
             'address' => '1234567890',
             'email' => 'test@hofros.com',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('hofros@2026'),
         ]);
     }
 }
