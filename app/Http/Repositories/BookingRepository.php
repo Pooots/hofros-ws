@@ -154,10 +154,11 @@ class BookingRepository
                 ->orWhereIn(
                     'uuid',
                     Booking::query()
-                        ->select('uuid')
                         ->where('user_uuid', $userUuid)
                         ->whereNotNull('portal_batch_id')
-                        ->groupBy('portal_batch_id'),
+                        ->groupBy('portal_batch_id')
+                        /** One representative row per batch (MySQL ONLY_FULL_GROUP_BY requires aggregate, not bare uuid). */
+                        ->selectRaw('MIN(uuid) as uuid'),
                 );
         });
     }
