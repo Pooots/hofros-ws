@@ -2,103 +2,58 @@
 
 namespace App\Http\Controllers\Api\V1\Configuration;
 
+use App\Exceptions\NoPropertyFoundException;
 use App\Http\Controllers\Controller;
-use App\Models\Property;
+use App\Http\Repositories\PropertyRepository;
+use App\Http\Requests\Property\CreatePropertyRequest;
+use App\Http\Requests\Property\ListPropertyRequest;
+use App\Http\Requests\Property\UpdatePropertyRequest;
+use App\Http\Resources\PropertyResource;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class PropertyController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function __construct(protected PropertyRepository $propertyRepository)
     {
-        $properties = Property::query()
-            ->where('user_id', $request->user()->id)
-            ->orderByDesc('updated_at')
-            ->get()
-            ->map(fn (Property $property) => $this->toPayload($property));
-
-        return response()->json(['properties' => $properties]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function index(ListPropertyRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'propertyName' => ['required', 'string', 'max:255'],
-            'contactEmail' => ['required', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:64'],
-            'address' => ['nullable', 'string', 'max:2000'],
-            'currency' => ['required', 'string', 'max:16'],
-            'checkInTime' => ['required', 'string', 'max:8'],
-            'checkOutTime' => ['required', 'string', 'max:8'],
+        $filters = array_merge($request->validated(), [
+            'user_uuid' => $request->user()->uuid,
         ]);
 
-        $property = Property::create([
-            'user_id' => $request->user()->id,
-            'property_name' => $validated['propertyName'],
-            'contact_email' => $validated['contactEmail'],
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'currency' => $validated['currency'],
-            'check_in_time' => $validated['checkInTime'],
-            'check_out_time' => $validated['checkOutTime'],
-        ]);
+        $properties = $this->propertyRepository->getAll($filters)->get();
 
-        return response()->json($this->toPayload($property), 201);
+        return response()->json([
+            'properties' => PropertyResource::collection($properties)->resolve($request),
+        ]);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function store(CreatePropertyRequest $request): JsonResponse
     {
-        $property = Property::query()
-            ->where('user_id', $request->user()->id)
-            ->whereKey($id)
-            ->firstOrFail();
+        $property = $this->propertyRepository->create($request->toModelPayload());
 
-        $validated = $request->validate([
-            'propertyName' => ['required', 'string', 'max:255'],
-            'contactEmail' => ['required', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:64'],
-            'address' => ['nullable', 'string', 'max:2000'],
-            'currency' => ['required', 'string', 'max:16'],
-            'checkInTime' => ['required', 'string', 'max:8'],
-            'checkOutTime' => ['required', 'string', 'max:8'],
-        ]);
-
-        $property->update([
-            'property_name' => $validated['propertyName'],
-            'contact_email' => $validated['contactEmail'],
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'currency' => $validated['currency'],
-            'check_in_time' => $validated['checkInTime'],
-            'check_out_time' => $validated['checkOutTime'],
-        ]);
-
-        return response()->json($this->toPayload($property->fresh()));
+        return (new PropertyResource($property))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function update(UpdatePropertyRequest $request, string $uuid): JsonResponse
     {
-        $property = Property::query()
-            ->where('user_id', $request->user()->id)
-            ->whereKey($id)
-            ->firstOrFail();
+        $property = $this->propertyRepository->fetchOrThrow('uuid', $uuid, $request->user()->uuid);
+        $this->propertyRepository->update($property, $request->toModelPayload());
 
-        $property->delete();
+        return (new PropertyResource($property->fresh()))->response();
+    }
+
+    public function destroy(string $uuid): JsonResponse|Response
+    {
+        $request = request();
+        $property = $this->propertyRepository->fetchOrThrow('uuid', $uuid, $request->user()->uuid);
+        $this->propertyRepository->delete($property);
 
         return response()->json(['message' => 'Property deleted.']);
-    }
-
-    private function toPayload(Property $property): array
-    {
-        return [
-            'id' => $property->id,
-            'propertyName' => $property->property_name,
-            'contactEmail' => $property->contact_email,
-            'phone' => $property->phone,
-            'address' => $property->address,
-            'currency' => $property->currency,
-            'checkInTime' => $property->check_in_time,
-            'checkOutTime' => $property->check_out_time,
-        ];
     }
 }

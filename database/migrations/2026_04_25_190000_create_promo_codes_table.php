@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('promo_codes', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
             $table->string('code', 64)->index();
             $table->string('discount_type', 50)->index();
             $table->decimal('discount_value', 12, 2);
@@ -21,8 +21,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['user_id', 'code']);
-            $table->index(['user_id', 'status']);
+            $table->unique(['user_uuid', 'code']);
+            $table->index(['user_uuid', 'status']);
             $table->index(['created_at', 'updated_at'], 'promo_codes_timestamp_index');
         });
     }

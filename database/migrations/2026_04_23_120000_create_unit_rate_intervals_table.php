@@ -9,9 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('unit_rate_intervals', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
-            $table->unsignedBigInteger('unit_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
+            $table->uuid('unit_uuid')->index();
             $table->string('name')->nullable()->index();
             $table->date('start_date')->index();
             $table->date('end_date')->index();
@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('currency', 16)->default('PHP');
             $table->timestamps();
 
-            $table->index(['unit_id', 'start_date']);
+            $table->index(['unit_uuid', 'start_date']);
             $table->index(['created_at', 'updated_at'], 'unit_rate_intervals_timestamp_index');
         });
     }

@@ -9,9 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('unit_discounts', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
-            $table->unsignedBigInteger('unit_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
+            $table->uuid('unit_uuid')->index();
             $table->string('discount_type', 50)->index();
             $table->decimal('discount_percent', 12, 2);
             $table->integer('min_days_in_advance')->nullable();
@@ -21,8 +21,8 @@ return new class extends Migration
             $table->string('status', 32)->default('active')->index();
             $table->timestamps();
 
-            $table->index(['user_id', 'status']);
-            $table->index(['user_id', 'unit_id']);
+            $table->index(['user_uuid', 'status']);
+            $table->index(['user_uuid', 'unit_uuid']);
             $table->index(['created_at', 'updated_at'], 'unit_discounts_timestamp_index');
         });
     }

@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('booking_portal_connections', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
             $table->string('portal_key', 64)->index();
             $table->boolean('is_connected')->default(false);
             $table->boolean('is_active')->default(true);
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->json('guest_portal_layout')->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'portal_key']);
+            $table->unique(['user_uuid', 'portal_key']);
             $table->index(['created_at', 'updated_at'], 'booking_portal_timestamp_index');
         });
     }

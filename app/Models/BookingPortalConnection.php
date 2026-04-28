@@ -2,13 +2,22 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BookingPortalConnection extends Model
 {
+    use HasFactory;
+    use HasUuids;
+
+    public $incrementing = false;
+    public $primaryKey = 'uuid';
+    protected $keyType = 'string';
+
     protected $fillable = [
-        'user_id',
+        'user_uuid',
         'portal_key',
         'is_connected',
         'is_active',

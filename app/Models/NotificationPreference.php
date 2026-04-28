@@ -2,13 +2,22 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NotificationPreference extends Model
 {
+    use HasFactory;
+    use HasUuids;
+
+    public $incrementing = false;
+    public $primaryKey = 'uuid';
+    protected $keyType = 'string';
+
     protected $fillable = [
-        'user_id',
+        'user_uuid',
         'new_booking',
         'cancellation',
         'check_in',
@@ -37,7 +46,7 @@ class NotificationPreference extends Model
     public static function ensureForUser(User $user): self
     {
         return self::firstOrCreate(
-            ['user_id' => $user->id],
+            ['user_uuid' => $user->uuid],
             [
                 'new_booking' => true,
                 'cancellation' => true,

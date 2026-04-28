@@ -3,25 +3,22 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Dashboard\DashboardRequest;
 use App\Models\Booking;
 use App\Models\Unit;
 use App\Models\UnitDateBlock;
 use App\Support\MerchantBookingAnalytics;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(DashboardRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'date' => ['nullable', 'date_format:Y-m-d'],
-            'outlookStart' => ['nullable', 'date_format:Y-m-d'],
-        ]);
+        $validated = $request->validated();
 
-        $userId = (int) $request->user()->id;
+        $userUuid = $request->user()->uuid;
         $today = isset($validated['date'])
             ? Carbon::createFromFormat('Y-m-d', $validated['date'])->startOfDay()
             : Carbon::today();
@@ -32,23 +29,23 @@ class DashboardController extends Controller
             : $today->copy();
         $outlookEndDay = $outlookStart->copy()->addDays(13)->startOfDay();
 
-        $totalUnits = MerchantBookingAnalytics::activeUnitsCount($userId);
+        $totalUnits = MerchantBookingAnalytics::activeUnitsCount($userUuid);
 
         $rangeStart = $today->copy()->min($outlookStart)->min($tomorrow);
         $rangeEnd = $outlookEndDay->copy()->max($tomorrow);
 
         $bookingsOverlapRange = Booking::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->whereDate('check_in', '<=', $rangeEnd->toDateString())
             ->whereDate('check_out', '>', $rangeStart->toDateString())
             ->with($this->bookingUnitEagerLoad())
             ->get();
 
         $blocksOverlapRange = UnitDateBlock::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->whereDate('start_date', '<=', $rangeEnd->toDateString())
             ->whereDate('end_date', '>', $rangeStart->toDateString())
-            ->get(['id', 'unit_id', 'start_date', 'end_date']);
+            ->get(['uuid', 'unit_uuid', 'start_date', 'end_date']);
 
         $qualifying = $bookingsOverlapRange->filter(
             fn (Booking $b) => $b->status !== Booking::STATUS_CANCELLED
@@ -59,11 +56,10 @@ class DashboardController extends Controller
         $reservations = $this->buildReservationLists($today, $tomorrow, $qualifying);
 
         $bookedToday = Booking::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->whereDate('created_at', $today->toDateString())
             ->with($this->bookingUnitEagerLoad())
             ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->get();
 
         /** Created today: pending, accepted, and assigned (excludes cancelled). */
@@ -86,12 +82,11 @@ class DashboardController extends Controller
         $kpis['newlyBookedToday'] = $newBookingsToday->count();
 
         $cancellationsToday = Booking::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', Booking::STATUS_CANCELLED)
             ->whereDate('updated_at', $today->toDateString())
             ->with($this->bookingUnitEagerLoad())
             ->orderByDesc('updated_at')
-            ->orderByDesc('id')
             ->get();
 
         $todayActivity = [
@@ -100,7 +95,7 @@ class DashboardController extends Controller
                 'rows' => $cancellationsToday->map(fn (Booking $b) => $this->cancellationRow($b))->values()->all(),
             ],
             'overbookings' => [
-                'rows' => $this->findOverbookingRows($userId),
+                'rows' => $this->findOverbookingRows((string) $userUuid),
             ],
         ];
 
@@ -113,7 +108,7 @@ class DashboardController extends Controller
         );
 
         $defaultCurrency = Unit::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', 'active')
             ->value('currency') ?? MerchantBookingAnalytics::CURRENCY_CODE;
 
@@ -143,13 +138,13 @@ class DashboardController extends Controller
             fn (Booking $b) => $b->check_out?->toDateString() === $d
         )->count();
 
-        $occupiedUnitIds = $qualifying
+        $occupiedUnitUuids = $qualifying
             ->filter(fn (Booking $b) => $this->stayCoversDate($b, $today))
-            ->pluck('unit_id')
+            ->pluck('unit_uuid')
             ->unique()
             ->values();
 
-        $accommodationsBooked = $occupiedUnitIds->count();
+        $accommodationsBooked = $occupiedUnitUuids->count();
         $accommodationsBookedPct = $totalUnits > 0
             ? round(($accommodationsBooked / $totalUnits) * 100, 1)
             : 0.0;
@@ -282,7 +277,7 @@ class DashboardController extends Controller
     private function salesRow(Booking $b): array
     {
         return [
-            'bookingId' => $b->id,
+            'bookingId' => $b->uuid,
             'guestName' => $b->guest_name,
             'revenue' => (float) $b->total_price,
             'currency' => $b->currency,
@@ -297,7 +292,7 @@ class DashboardController extends Controller
     private function cancellationRow(Booking $b): array
     {
         return [
-            'bookingId' => $b->id,
+            'bookingId' => $b->uuid,
             'guestName' => $b->guest_name,
             'revenue' => (float) $b->total_price,
             'currency' => $b->currency,
@@ -313,7 +308,7 @@ class DashboardController extends Controller
     private function reservationRow(Booking $b, string $statusLabel): array
     {
         return [
-            'bookingId' => $b->id,
+            'bookingId' => $b->uuid,
             'guestName' => $b->guest_name,
             'guestPhone' => $b->guest_phone,
             'confirmation' => $b->reference,
@@ -394,12 +389,12 @@ class DashboardController extends Controller
     {
         $bookedIds = $qualifying
             ->filter(fn (Booking $b) => $this->stayCoversDate($b, $night))
-            ->pluck('unit_id')
+            ->pluck('unit_uuid')
             ->all();
 
         $blockedIds = $blocks
             ->filter(fn (UnitDateBlock $bl) => $this->blockCoversDate($bl, $night))
-            ->pluck('unit_id')
+            ->pluck('unit_uuid')
             ->all();
 
         return count(array_unique(array_merge($bookedIds, $blockedIds)));
@@ -433,18 +428,18 @@ class DashboardController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function findOverbookingRows(int $userId): array
+    private function findOverbookingRows(string $userUuid): array
     {
         $assigned = Booking::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', Booking::STATUS_ASSIGNED)
             ->with($this->bookingUnitEagerLoad())
-            ->orderBy('unit_id')
+            ->orderBy('unit_uuid')
             ->orderBy('check_in')
             ->get();
 
         $rows = [];
-        $byUnit = $assigned->groupBy('unit_id');
+        $byUnit = $assigned->groupBy('unit_uuid');
         foreach ($byUnit as $list) {
             /** @var Collection<int, Booking> $list */
             $arr = $list->values()->all();
@@ -453,9 +448,9 @@ class DashboardController extends Controller
                 for ($j = $i + 1; $j < $n; $j++) {
                     if ($this->bookingsDateOverlap($arr[$i], $arr[$j])) {
                         $rows[] = [
-                            'bookingIdA' => $arr[$i]->id,
-                            'bookingIdB' => $arr[$j]->id,
-                            'guestName' => $arr[$i]->guest_name.' / '.$arr[$j]->guest_name,
+                            'bookingIdA' => $arr[$i]->uuid,
+                            'bookingIdB' => $arr[$j]->uuid,
+                            'guestName' => $arr[$i]->guest_name . ' / ' . $arr[$j]->guest_name,
                             'room' => $this->roomLabel($arr[$i]),
                             'checkIn' => $arr[$i]->check_in?->format('Y-m-d'),
                             'checkOut' => $arr[$i]->check_out?->format('Y-m-d'),
@@ -486,8 +481,8 @@ class DashboardController extends Controller
         return [
             'unit' => static function ($q): void {
                 $q->select(
-                    'id',
-                    'property_id',
+                    'uuid',
+                    'property_uuid',
                     'name',
                     'type',
                     'max_guests',
@@ -498,7 +493,7 @@ class DashboardController extends Controller
                     'status'
                 )->with([
                     'property' => static function ($q2): void {
-                        $q2->select('id', 'property_name');
+                        $q2->select('uuid', 'property_name');
                     },
                 ]);
             },

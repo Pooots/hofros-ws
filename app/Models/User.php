@@ -4,7 +4,10 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -13,10 +16,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
+    use HasUuids;
     use HasApiTokens;
     use HasFactory;
     use Notifiable;
     use SoftDeletes;
+
+    public $incrementing = false;
+    public $primaryKey = 'uuid';
+    protected $keyType = 'string';
 
     /**
      * The attributes that are mass assignable.
@@ -57,32 +65,32 @@ class User extends Authenticatable
         ];
     }
 
-    public function properties(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function properties(): HasMany
     {
         return $this->hasMany(Property::class);
     }
 
-    public function units(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function units(): HasMany
     {
         return $this->hasMany(Unit::class);
     }
 
-    public function notificationPreference(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function notificationPreference(): HasOne
     {
         return $this->hasOne(NotificationPreference::class);
     }
 
-    public function ownedTeamMembers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function ownedTeamMembers(): HasMany
     {
-        return $this->hasMany(TeamMember::class, 'owner_user_id');
+        return $this->hasMany(TeamMember::class, 'owner_user_uuid');
     }
 
-    public function bookingPortalConnections(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function bookingPortalConnections(): HasMany
     {
         return $this->hasMany(BookingPortalConnection::class);
     }
 
-    public function bookings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
     }

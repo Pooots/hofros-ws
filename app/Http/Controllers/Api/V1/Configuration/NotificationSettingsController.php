@@ -3,53 +3,30 @@
 namespace App\Http\Controllers\Api\V1\Configuration;
 
 use App\Http\Controllers\Controller;
-use App\Models\NotificationPreference;
+use App\Http\Repositories\NotificationPreferenceRepository;
+use App\Http\Requests\NotificationPreference\UpdateNotificationPreferenceRequest;
+use App\Http\Resources\NotificationPreferenceResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NotificationSettingsController extends Controller
 {
+    public function __construct(protected NotificationPreferenceRepository $preferenceRepository)
+    {
+    }
+
     public function show(Request $request): JsonResponse
     {
-        $row = NotificationPreference::ensureForUser($request->user());
+        $row = $this->preferenceRepository->ensureForUser($request->user());
 
-        return response()->json($this->toPayload($row));
+        return (new NotificationPreferenceResource($row->fresh()))->response();
     }
 
-    public function update(Request $request): JsonResponse
+    public function update(UpdateNotificationPreferenceRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'newBooking' => ['required', 'boolean'],
-            'cancellation' => ['required', 'boolean'],
-            'checkIn' => ['required', 'boolean'],
-            'checkOut' => ['required', 'boolean'],
-            'payment' => ['required', 'boolean'],
-            'review' => ['required', 'boolean'],
-        ]);
+        $row = $this->preferenceRepository->ensureForUser($request->user());
+        $this->preferenceRepository->update($row, $request->toModelPayload());
 
-        $row = NotificationPreference::ensureForUser($request->user());
-
-        $row->update([
-            'new_booking' => $validated['newBooking'],
-            'cancellation' => $validated['cancellation'],
-            'check_in' => $validated['checkIn'],
-            'check_out' => $validated['checkOut'],
-            'payment' => $validated['payment'],
-            'review' => $validated['review'],
-        ]);
-
-        return response()->json($this->toPayload($row->fresh()));
-    }
-
-    private function toPayload(NotificationPreference $row): array
-    {
-        return [
-            'newBooking' => $row->new_booking,
-            'cancellation' => $row->cancellation,
-            'checkIn' => $row->check_in,
-            'checkOut' => $row->check_out,
-            'payment' => $row->payment,
-            'review' => $row->review,
-        ];
+        return (new NotificationPreferenceResource($row->fresh()))->response();
     }
 }

@@ -2,59 +2,38 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\InvalidDateRangeException;
+use App\Exceptions\NotFoundException;
 use App\Http\Controllers\Controller;
+use App\Http\Repositories\PublicDirectPortalRepository;
+use App\Http\Requests\PublicDirectPortal\PublicCalendarRequest;
 use App\Models\Booking;
-use App\Models\BookingPortalConnection;
 use App\Models\Unit;
 use App\Models\UnitDateBlock;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 class PublicDirectPortalCalendarController extends Controller
 {
-    public function show(Request $request, string $slug): JsonResponse
+    public function __construct(protected PublicDirectPortalRepository $portalRepository)
     {
-        $normalized = Str::lower(trim($slug));
+    }
 
-        $user = User::query()
-            ->whereNotNull('merchant_name')
-            ->get()
-            ->first(function (User $u) use ($normalized): bool {
-                $candidate = Str::slug((string) $u->merchant_name) ?: 'merchant';
+    public function show(PublicCalendarRequest $request, string $slug): JsonResponse
+    {
+        $resolved = $this->portalRepository->resolveBySlugOrThrow($slug);
+        $user = $resolved['user'];
 
-                return $candidate === $normalized;
-            });
-
-        if ($user === null) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
-
-        $row = BookingPortalConnection::query()
-            ->where('user_id', $user->id)
-            ->where('portal_key', 'direct_website')
-            ->first();
-
-        if ($row === null || ! $row->guest_portal_live) {
-            return response()->json(['message' => 'This booking link is not published yet.'], 404);
-        }
-
-        $validated = $request->validate([
-            'from' => ['required', 'date_format:Y-m-d'],
-            'to' => ['required', 'date_format:Y-m-d', 'after:from'],
-            'unitId' => ['nullable', 'integer'],
-        ]);
+        $validated = $request->validated();
 
         $from = Carbon::createFromFormat('Y-m-d', $validated['from'])->startOfDay();
         $to = Carbon::createFromFormat('Y-m-d', $validated['to'])->startOfDay();
         if ($from->diffInDays($to) > 400) {
-            return response()->json(['message' => 'Date range is too large (max 400 days).'], 422);
+            throw new InvalidDateRangeException();
         }
 
         $unitsQuery = Unit::query()
-            ->where('user_id', $user->id)
+            ->where('user_uuid', $user->uuid)
             ->where('status', 'active')
             ->orderBy('type')
             ->orderBy('name');
@@ -63,12 +42,12 @@ class PublicDirectPortalCalendarController extends Controller
             $unitsQuery->whereKey($validated['unitId']);
         }
 
-        $units = $unitsQuery->get(['id', 'name', 'type', 'price_per_night', 'currency']);
-        $unitIds = $units->pluck('id')->all();
+        $units = $unitsQuery->get(['uuid', 'name', 'type', 'price_per_night', 'currency']);
+        $unitUuids = $units->pluck('uuid')->all();
 
-        if ($unitIds === []) {
+        if ($unitUuids === []) {
             if (array_key_exists('unitId', $validated) && $validated['unitId'] !== null) {
-                return response()->json(['message' => 'Unit not found.'], 404);
+                throw new NotFoundException('Unit not found.');
             }
 
             return response()->json([
@@ -79,8 +58,8 @@ class PublicDirectPortalCalendarController extends Controller
         }
 
         $bookings = Booking::query()
-            ->where('user_id', $user->id)
-            ->whereIn('unit_id', $unitIds)
+            ->where('user_uuid', $user->uuid)
+            ->whereIn('unit_uuid', $unitUuids)
             ->whereIn('status', [
                 Booking::STATUS_ACCEPTED,
                 Booking::STATUS_ASSIGNED,
@@ -90,32 +69,32 @@ class PublicDirectPortalCalendarController extends Controller
             ->where('check_in', '<', $to->toDateString())
             ->where('check_out', '>', $from->toDateString())
             ->orderBy('check_in')
-            ->get(['id', 'unit_id', 'reference', 'guest_name', 'check_in', 'check_out', 'status', 'source']);
+            ->get(['uuid', 'unit_uuid', 'reference', 'guest_name', 'check_in', 'check_out', 'status', 'source']);
 
         $blocks = UnitDateBlock::query()
-            ->where('user_id', $user->id)
-            ->whereIn('unit_id', $unitIds)
+            ->where('user_uuid', $user->uuid)
+            ->whereIn('unit_uuid', $unitUuids)
             ->where('start_date', '<', $to->toDateString())
             ->where('end_date', '>', $from->toDateString())
             ->orderBy('start_date')
-            ->get(['id', 'unit_id', 'start_date', 'end_date', 'label']);
+            ->get(['uuid', 'unit_uuid', 'start_date', 'end_date', 'label']);
 
-        $bookingsByUnit = $bookings->groupBy('unit_id');
-        $blocksByUnit = $blocks->groupBy('unit_id');
+        $bookingsByUnit = $bookings->groupBy('unit_uuid');
+        $blocksByUnit = $blocks->groupBy('unit_uuid');
 
         $payload = $units->map(static function (Unit $unit) use ($bookingsByUnit, $blocksByUnit): array {
-            $bRows = $bookingsByUnit->get($unit->id, collect());
-            $kRows = $blocksByUnit->get($unit->id, collect());
+            $bRows = $bookingsByUnit->get($unit->uuid, collect());
+            $kRows = $blocksByUnit->get($unit->uuid, collect());
 
             return [
-                'id' => $unit->id,
+                'uuid' => $unit->uuid,
                 'name' => $unit->name,
                 'type' => $unit->type,
                 'pricePerNight' => (float) $unit->price_per_night,
                 'currency' => $unit->currency,
                 'bookings' => $bRows->map(static function (Booking $b): array {
                     return [
-                        'id' => $b->id,
+                        'uuid' => $b->uuid,
                         'reference' => $b->reference,
                         'guestName' => $b->guest_name,
                         'checkIn' => $b->check_in?->format('Y-m-d'),
@@ -126,7 +105,7 @@ class PublicDirectPortalCalendarController extends Controller
                 })->values()->all(),
                 'blocks' => $kRows->map(static function (UnitDateBlock $k): array {
                     return [
-                        'id' => $k->id,
+                        'uuid' => $k->uuid,
                         'startDate' => $k->start_date?->format('Y-m-d'),
                         'endDate' => $k->end_date?->format('Y-m-d'),
                         'label' => $k->label,

@@ -15,17 +15,17 @@ final class MerchantBookingAnalytics
     public const CURRENCY_SYMBOL = '₱';
 
     /** @return Builder<Booking> */
-    public static function qualifyingBookingsQuery(int $userId): Builder
+    public static function qualifyingBookingsQuery(string $userUuid): Builder
     {
         return Booking::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', '!=', Booking::STATUS_CANCELLED);
     }
 
-    public static function activeUnitsCount(int $userId): int
+    public static function activeUnitsCount(string $userUuid): int
     {
         return (int) Unit::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', 'active')
             ->count();
     }
@@ -35,12 +35,12 @@ final class MerchantBookingAnalytics
      *
      * @return Collection<int, Booking>
      */
-    public static function bookingsForYear(int $userId, int $year): Collection
+    public static function bookingsForYear(string $userUuid, int $year): Collection
     {
         $start = "{$year}-01-01";
         $end = "{$year}-12-31";
 
-        return self::qualifyingBookingsQuery($userId)
+        return self::qualifyingBookingsQuery($userUuid)
             ->whereDate('check_in', '>=', $start)
             ->whereDate('check_in', '<=', $end)
             ->get();
@@ -51,9 +51,9 @@ final class MerchantBookingAnalytics
      *
      * @return Collection<int, Booking>
      */
-    public static function bookingsOverlappingYear(int $userId, int $year): Collection
+    public static function bookingsOverlappingYear(string $userUuid, int $year): Collection
     {
-        return self::qualifyingBookingsQuery($userId)
+        return self::qualifyingBookingsQuery($userUuid)
             ->whereDate('check_in', '<=', "{$year}-12-31")
             ->whereDate('check_out', '>', "{$year}-01-01")
             ->get();
@@ -107,9 +107,9 @@ final class MerchantBookingAnalytics
         return $n;
     }
 
-    public static function occupancyPctForMonth(int $userId, int $year, int $month, Collection $bookingsOverlapping): float
+    public static function occupancyPctForMonth(string $userUuid, int $year, int $month, Collection $bookingsOverlapping): float
     {
-        $units = self::activeUnitsCount($userId);
+        $units = self::activeUnitsCount($userUuid);
         if ($units === 0) {
             return 0.0;
         }
@@ -126,11 +126,11 @@ final class MerchantBookingAnalytics
         return round(min(100.0, ($numerator / $denominator) * 100), 1);
     }
 
-    public static function yearAvgOccupancy(int $userId, int $year, Collection $bookingsOverlapping): float
+    public static function yearAvgOccupancy(string $userUuid, int $year, Collection $bookingsOverlapping): float
     {
         $sum = 0.0;
         for ($m = 1; $m <= 12; $m++) {
-            $sum += self::occupancyPctForMonth($userId, $year, $m, $bookingsOverlapping);
+            $sum += self::occupancyPctForMonth($userUuid, $year, $m, $bookingsOverlapping);
         }
 
         return round($sum / 12, 1);
@@ -172,9 +172,9 @@ final class MerchantBookingAnalytics
     /**
      * @return list<array{period: string, period_start: string, period_end: string, bookings_count: int, total_revenue: float, guest_nights: int}>
      */
-    public static function exportRows(int $userId, int $year, string $granularity): array
+    public static function exportRows(string $userUuid, int $year, string $granularity): array
     {
-        $bookings = self::qualifyingBookingsQuery($userId)
+        $bookings = self::qualifyingBookingsQuery($userUuid)
             ->whereDate('check_in', '>=', "{$year}-01-01")
             ->whereDate('check_in', '<=', "{$year}-12-31")
             ->orderBy('check_in')

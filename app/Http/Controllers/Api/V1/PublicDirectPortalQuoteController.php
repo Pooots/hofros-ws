@@ -2,81 +2,51 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\BookingValidationException;
 use App\Http\Controllers\Controller;
-use App\Models\BookingPortalConnection;
+use App\Http\Repositories\PublicDirectPortalRepository;
+use App\Http\Requests\PublicDirectPortal\PublicQuoteRequest;
 use App\Models\Unit;
-use App\Models\User;
 use App\Support\BookingStayConflict;
 use App\Support\DirectPortalPromoCode;
 use App\Support\UnitStayPricing;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 class PublicDirectPortalQuoteController extends Controller
 {
-    public function show(Request $request, string $slug): JsonResponse
+    public function __construct(protected PublicDirectPortalRepository $portalRepository)
     {
-        $normalized = Str::lower(trim($slug));
+    }
 
-        $user = User::query()
-            ->whereNotNull('merchant_name')
-            ->get()
-            ->first(function (User $u) use ($normalized): bool {
-                $candidate = Str::slug((string) $u->merchant_name) ?: 'merchant';
+    public function show(PublicQuoteRequest $request, string $slug): JsonResponse
+    {
+        $resolved = $this->portalRepository->resolveBySlugOrThrow($slug);
+        $user = $resolved['user'];
 
-                return $candidate === $normalized;
-            });
-
-        if ($user === null) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
-
-        $row = BookingPortalConnection::query()
-            ->where('user_id', $user->id)
-            ->where('portal_key', 'direct_website')
-            ->first();
-
-        if ($row === null || ! $row->guest_portal_live) {
-            return response()->json(['message' => 'This booking link is not published yet.'], 404);
-        }
-
-        $validated = $request->validate([
-            'unitId' => ['required', 'integer'],
-            'checkIn' => ['required', 'date_format:Y-m-d'],
-            'checkOut' => ['required', 'date_format:Y-m-d', 'after:checkIn'],
-            'unitCount' => ['sometimes', 'integer', 'min:1', 'max:'.BookingStayConflict::MAX_PORTAL_UNITS_PER_BOOKING],
-            'promoCode' => ['sometimes', 'nullable', 'string', 'max:64'],
-        ]);
+        $validated = $request->validated();
 
         $unit = Unit::query()
-            ->where('user_id', $user->id)
+            ->where('user_uuid', $user->uuid)
             ->whereKey($validated['unitId'])
             ->where('status', 'active')
             ->first();
 
         if ($unit === null) {
-            return response()->json(['message' => 'This unit is not available for booking.'], 422);
+            throw new BookingValidationException('This unit is not available for booking.');
         }
 
         $checkIn = Carbon::createFromFormat('Y-m-d', $validated['checkIn'])->startOfDay();
         $checkOut = Carbon::createFromFormat('Y-m-d', $validated['checkOut'])->startOfDay();
 
         $unitCount = (int) ($validated['unitCount'] ?? 1);
-        if ($unit->property_id === null && $unitCount > 1) {
-            return response()->json(['message' => 'Only one unit can be booked for this listing.'], 422);
-        }
 
-        $bookUnits = BookingStayConflict::resolveDirectPortalBookUnits($user->id, $unit, $checkIn, $checkOut, $unitCount);
+        $bookUnits = BookingStayConflict::resolveDirectPortalBookUnits($user->uuid, $unit, $checkIn, $checkOut, $unitCount);
         if (count($bookUnits) < $unitCount) {
             $have = count($bookUnits);
-
-            return response()->json([
-                'message' => $have === 0
-                    ? BookingStayConflict::guestPortalUnavailableMessage()
-                    : BookingStayConflict::guestPortalInsufficientUnitsMessage($have, $unitCount),
-            ], 422);
+            throw new BookingValidationException($have === 0
+                ? BookingStayConflict::guestPortalUnavailableMessage()
+                : BookingStayConflict::guestPortalInsufficientUnitsMessage($have, $unitCount));
         }
 
         $sum = 0.0;
@@ -85,7 +55,7 @@ class PublicDirectPortalQuoteController extends Controller
         foreach ($bookUnits as $bookUnit) {
             $pricing = UnitStayPricing::computeForStay($bookUnit, $checkIn, $checkOut);
             if ($pricing['error'] !== null) {
-                return response()->json(['message' => $pricing['error']], 422);
+                throw new BookingValidationException((string) $pricing['error']);
             }
             $sum += (float) $pricing['total'];
             $currency = $pricing['currency'];
@@ -94,13 +64,13 @@ class PublicDirectPortalQuoteController extends Controller
 
         $subtotal = round($sum, 2);
         $promo = DirectPortalPromoCode::resolve(
-            (int) $user->id,
+            $user->uuid,
             $validated['promoCode'] ?? null,
             (int) $nights,
             $subtotal,
         );
         if (! $promo['ok']) {
-            return response()->json(['message' => $promo['message']], 422);
+            throw new BookingValidationException((string) $promo['message']);
         }
 
         return response()->json([

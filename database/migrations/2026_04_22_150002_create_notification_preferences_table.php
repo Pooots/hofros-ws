@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('notification_preferences', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
             $table->boolean('new_booking')->default(true);
             $table->boolean('cancellation')->default(true);
             $table->boolean('check_in')->default(true);
@@ -19,7 +19,7 @@ return new class extends Migration
             $table->boolean('review')->default(false);
             $table->timestamps();
 
-            $table->unique('user_id');
+            $table->unique('user_uuid');
             $table->index(['created_at', 'updated_at'], 'notification_preferences_timestamp_index');
         });
     }
