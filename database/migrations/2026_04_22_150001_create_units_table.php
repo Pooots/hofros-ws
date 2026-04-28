@@ -24,7 +24,7 @@ return new class extends Migration
             $table->decimal('price_per_night', 12, 2);
             $table->string('currency', 16)->default('PHP');
             $table->string('status', 32)->default('active');
-            $table->json('week_schedule')->nullable()->default(json_encode(Unit::defaultWeekSchedule()));
+            $table->json('week_schedule')->nullable();
             $table->timestamps();
 
             $table->index(['user_uuid', 'status']);
