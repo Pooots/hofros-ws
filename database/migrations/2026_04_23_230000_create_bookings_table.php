@@ -9,9 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('bookings', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
-            $table->unsignedBigInteger('unit_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
+            $table->uuid('unit_uuid')->index();
             $table->string('reference', 40)->unique();
             $table->string('guest_name', 255)->nullable()->index();
             $table->string('guest_email', 255)->nullable()->index();
@@ -29,8 +29,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['user_id', 'status']);
-            $table->index(['user_id', 'check_in']);
+            $table->index(['user_uuid', 'status']);
+            $table->index(['user_uuid', 'check_in']);
             $table->index(['created_at', 'updated_at'], 'bookings_timestamp_index');
         });
     }

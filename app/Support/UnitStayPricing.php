@@ -68,7 +68,7 @@ final class UnitStayPricing
 
         $intervals = $unit->relationLoaded('rateIntervals')
             ? $unit->rateIntervals
-            : $unit->rateIntervals()->orderBy('start_date')->orderBy('id')->get();
+            : $unit->rateIntervals()->orderBy('start_date')->orderByDesc('created_at')->get();
 
         foreach ($intervals as $interval) {
             if ($interval->start_date === null || $interval->end_date === null) {
@@ -115,7 +115,7 @@ final class UnitStayPricing
         $checkOut = $checkOut->copy()->startOfDay();
         $nights = max(1, $checkIn->diffInDays($checkOut));
 
-        $intervals = $unit->rateIntervals()->orderBy('start_date')->orderBy('id')->get();
+        $intervals = $unit->rateIntervals()->orderBy('start_date')->orderBy('created_at')->get();
 
         $err = self::validationError($unit, $checkIn, $checkOut, $nights, $intervals);
         if ($err !== null) {
@@ -233,7 +233,7 @@ final class UnitStayPricing
                 return $spanA <=> $spanB;
             }
 
-            return $b->id <=> $a->id;
+            return $b->created_at <=> $a->created_at;
         });
 
         return $sorted->first();

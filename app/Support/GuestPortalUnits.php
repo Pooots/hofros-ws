@@ -9,13 +9,13 @@ final class GuestPortalUnits
     /**
      * Active units for a merchant, safe for public / guest portal JSON.
      *
-     * @return list<array{id: int, name: string, type: string, maxGuests: int, bedrooms: int|null, beds: int|null, pricePerNight: float, pricePerNightMax: float, currency: string, propertyId: int|null, propertyName: string|null, description: string|null, details: string|null, images: list<string>, weekSchedule: array<string, bool>}>
+     * @return list<array{uuid: string, name: string, type: string, maxGuests: int, bedrooms: int|null, beds: int|null, pricePerNight: float, pricePerNightMax: float, currency: string, propertyId: string|null, propertyName: string|null, description: string|null, details: string|null, images: list<string>, weekSchedule: array<string, bool>}>
      */
-    public static function publicPayloadForUserId(int $userId): array
+    public static function publicPayloadForUserUuid(string $userUuid): array
     {
         return Unit::query()
-            ->with(['property:id,property_name', 'rateIntervals'])
-            ->where('user_id', $userId)
+            ->with(['property:uuid,property_name', 'rateIntervals'])
+            ->where('user_uuid', $userUuid)
             ->where('status', 'active')
             ->orderBy('name')
             ->get()
@@ -27,7 +27,7 @@ final class GuestPortalUnits
                 $nightly = UnitStayPricing::displayMinMaxNightlyForPortal($unit);
 
                 return [
-                    'id' => $unit->id,
+                    'uuid' => $unit->uuid,
                     'name' => $unit->name,
                     'type' => $unit->type,
                     'maxGuests' => $unit->max_guests,
@@ -36,7 +36,7 @@ final class GuestPortalUnits
                     'pricePerNight' => $nightly['min'],
                     'pricePerNightMax' => $nightly['max'],
                     'currency' => $unit->currency,
-                    'propertyId' => $unit->property_id !== null ? (int) $unit->property_id : null,
+                    'propertyId' => $unit->property_uuid,
                     'propertyName' => $unit->property?->property_name,
                     'description' => $unit->description,
                     'details' => $unit->details,

@@ -9,7 +9,7 @@ final class DirectPortalPromoCode
     /**
      * @return array{ok:bool, message:?string, promo:?PromoCode, discountAmount:float, discountedTotal:float}
      */
-    public static function resolve(int $userId, ?string $rawCode, int $nights, float $subtotal): array
+    public static function resolve(string $userUuid, ?string $rawCode, int $nights, float $subtotal): array
     {
         $code = strtoupper(trim((string) $rawCode));
         $base = round(max(0.0, $subtotal), 2);
@@ -24,7 +24,7 @@ final class DirectPortalPromoCode
         }
 
         $promo = PromoCode::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('code', $code)
             ->where('status', PromoCode::STATUS_ACTIVE)
             ->first();
@@ -86,4 +86,3 @@ final class DirectPortalPromoCode
         return round(min($base, max(0.0, $raw)), 2);
     }
 }
-

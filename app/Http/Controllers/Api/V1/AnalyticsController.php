@@ -3,24 +3,22 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Analytics\AnalyticsExportRequest;
+use App\Http\Requests\Analytics\AnalyticsSummaryRequest;
 use App\Models\Booking;
 use App\Models\Unit;
 use App\Support\MerchantBookingAnalytics;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AnalyticsController extends Controller
 {
-    public function summary(Request $request): JsonResponse
+    public function summary(AnalyticsSummaryRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
-        ]);
+        $validated = $request->validated();
         $year = $validated['year'] ?? (int) now()->year;
-        $userId = (int) $request->user()->id;
+        $userId = $request->user()->uuid;
 
         $bookings = MerchantBookingAnalytics::bookingsForYear($userId, $year);
         $prevYearBookings = MerchantBookingAnalytics::bookingsForYear($userId, $year - 1);
@@ -87,24 +85,24 @@ class AnalyticsController extends Controller
         $daysInYear = Carbon::createFromDate($year, 1, 1)->isLeapYear() ? 366 : 365;
         $unitsOut = [];
         $units = Unit::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userId)
             ->where('status', 'active')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['uuid', 'name']);
 
         foreach ($units as $unit) {
-            $uBookings = $bookings->where('unit_id', $unit->id);
+            $uBookings = $bookings->where('unit_uuid', $unit->uuid);
             $uRev = MerchantBookingAnalytics::totalRevenue($uBookings);
             $uBk = $uBookings->count();
             $uNightsYear = 0;
-            foreach ($overlap->where('unit_id', $unit->id) as $ob) {
+            foreach ($overlap->where('unit_uuid', $unit->uuid) as $ob) {
                 $uNightsYear += MerchantBookingAnalytics::nightsInCalendarYear($ob, $year);
             }
             $uOcc = $daysInYear > 0 ? round(min(100.0, ($uNightsYear / $daysInYear) * 100), 1) : 0.0;
             $uNightsAdr = MerchantBookingAnalytics::totalBookedNights($uBookings);
             $uAdr = $uNightsAdr > 0 ? round($uRev / $uNightsAdr, 2) : 0.0;
             $unitsOut[] = [
-                'unitId' => $unit->id,
+                'unitUuid' => $unit->uuid,
                 'name' => $unit->name,
                 'totalRevenue' => $uRev,
                 'bookings' => $uBk,
@@ -142,19 +140,16 @@ class AnalyticsController extends Controller
         ]);
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(AnalyticsExportRequest $request): StreamedResponse
     {
-        $validated = $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'granularity' => ['required', 'string', Rule::in(['daily', 'weekly', 'monthly', 'yearly'])],
-        ]);
+        $validated = $request->validated();
         $year = (int) $validated['year'];
         $granularity = (string) $validated['granularity'];
-        $userId = (int) $request->user()->id;
+        $userId = $request->user()->uuid;
 
         $rows = MerchantBookingAnalytics::exportRows($userId, $year, $granularity);
         $safeGran = preg_replace('/[^a-z]/', '', $granularity) ?? $granularity;
-        $filename = 'analytics-bookings-'.$year.'-'.$safeGran.'.csv';
+        $filename = 'analytics-bookings-' . $year . '-' . $safeGran . '.csv';
 
         return response()->streamDownload(function () use ($rows): void {
             $out = fopen('php://output', 'w');

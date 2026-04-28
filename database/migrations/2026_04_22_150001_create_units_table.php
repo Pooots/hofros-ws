@@ -10,9 +10,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('units', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->index();
-            $table->unsignedBigInteger('property_id')->index();
+            $table->uuid('uuid')->primary()->unique()->index();
+            $table->uuid('user_uuid')->index();
+            $table->uuid('property_uuid')->index();
             $table->string('name')->index();
             $table->string('details', 500)->nullable();
             $table->text('description')->nullable();
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->json('week_schedule')->nullable()->default(json_encode(Unit::defaultWeekSchedule()));
             $table->timestamps();
 
-            $table->index(['user_id', 'status']);
+            $table->index(['user_uuid', 'status']);
             $table->index(['created_at', 'updated_at'], 'units_timestamp_index');
         });
     }

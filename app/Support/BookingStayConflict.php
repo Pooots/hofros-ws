@@ -17,11 +17,11 @@ final class BookingStayConflict
      * @param  CarbonInterface  $start  inclusive check-in date
      * @param  CarbonInterface  $end  exclusive check-out date (same semantics as bookings table)
      */
-    public static function hasOverlappingBooking(int $userId, int $unitId, CarbonInterface $start, CarbonInterface $end, ?int $exceptBookingId): bool
+    public static function hasOverlappingBooking(string $userUuid, string $unitUuid, CarbonInterface $start, CarbonInterface $end, ?string $exceptBookingUuid): bool
     {
         $q = Booking::query()
-            ->where('user_id', $userId)
-            ->where('unit_id', $unitId)
+            ->where('user_uuid', $userUuid)
+            ->where('unit_uuid', $unitUuid)
             ->whereIn('status', [
                 Booking::STATUS_ASSIGNED,
                 Booking::STATUS_CHECKED_IN,
@@ -30,18 +30,18 @@ final class BookingStayConflict
             ->where('check_in', '<', $end->toDateString())
             ->where('check_out', '>', $start->toDateString());
 
-        if ($exceptBookingId !== null) {
-            $q->where('id', '!=', $exceptBookingId);
+        if ($exceptBookingUuid !== null) {
+            $q->where('uuid', '!=', $exceptBookingUuid);
         }
 
         return $q->exists();
     }
 
-    public static function hasOverlappingBlock(int $userId, int $unitId, CarbonInterface $start, CarbonInterface $end): bool
+    public static function hasOverlappingBlock(string $userUuid, string $unitUuid, CarbonInterface $start, CarbonInterface $end): bool
     {
         return UnitDateBlock::query()
-            ->where('user_id', $userId)
-            ->where('unit_id', $unitId)
+            ->where('user_uuid', $userUuid)
+            ->where('unit_uuid', $unitUuid)
             ->where('start_date', '<', $end->toDateString())
             ->where('end_date', '>', $start->toDateString())
             ->exists();
@@ -50,11 +50,11 @@ final class BookingStayConflict
     /**
      * True when a manual unit date block would overlap an accepted or assigned stay on that unit.
      */
-    public static function blockOverlapsFirmBooking(int $userId, int $unitId, CarbonInterface $start, CarbonInterface $end): bool
+    public static function blockOverlapsFirmBooking(string $userUuid, string $unitUuid, CarbonInterface $start, CarbonInterface $end): bool
     {
         return Booking::query()
-            ->where('user_id', $userId)
-            ->where('unit_id', $unitId)
+            ->where('user_uuid', $userUuid)
+            ->where('unit_uuid', $unitUuid)
             ->whereIn('status', [
                 Booking::STATUS_ACCEPTED,
                 Booking::STATUS_ASSIGNED,
@@ -72,15 +72,15 @@ final class BookingStayConflict
      * Pending requests are ignored so abandoned or duplicate portal submissions do not block new guests; the host
      * calendar also only treats accepted/assigned stays as firm occupancy for this unit.
      */
-    public static function guestPortalStayIsUnavailable(int $userId, int $unitId, CarbonInterface $start, CarbonInterface $end): bool
+    public static function guestPortalStayIsUnavailable(string $userUuid, string $unitUuid, CarbonInterface $start, CarbonInterface $end): bool
     {
-        if (self::hasOverlappingBlock($userId, $unitId, $start, $end)) {
+        if (self::hasOverlappingBlock($userUuid, $unitUuid, $start, $end)) {
             return true;
         }
 
         return Booking::query()
-            ->where('user_id', $userId)
-            ->where('unit_id', $unitId)
+            ->where('user_uuid', $userUuid)
+            ->where('unit_uuid', $unitUuid)
             ->whereIn('status', [
                 Booking::STATUS_ACCEPTED,
                 Booking::STATUS_ASSIGNED,
@@ -95,31 +95,31 @@ final class BookingStayConflict
     /**
      * Picks one unit for a direct-portal stay (see {@see resolveDirectPortalUnitExcluding}).
      */
-    public static function resolveDirectPortalUnit(int $userId, Unit $listedUnit, CarbonInterface $checkIn, CarbonInterface $checkOut): ?Unit
+    public static function resolveDirectPortalUnit(string $userUuid, Unit $listedUnit, CarbonInterface $checkIn, CarbonInterface $checkOut): ?Unit
     {
-        return self::resolveDirectPortalUnitExcluding($userId, $listedUnit, $checkIn, $checkOut, []);
+        return self::resolveDirectPortalUnitExcluding($userUuid, $listedUnit, $checkIn, $checkOut, []);
     }
 
     /**
-     * Same as {@see resolveDirectPortalUnit} but skips any unit ids in {@see $excludeUnitIds} (e.g. already picked in a multi-unit request).
+     * Same as {@see resolveDirectPortalUnit} but skips any unit uuids in {@see $excludeUnitUuids} (e.g. already picked in a multi-unit request).
      *
-     * @param  list<int>  $excludeUnitIds
+     * @param  list<string>  $excludeUnitUuids
      */
     public static function resolveDirectPortalUnitExcluding(
-        int $userId,
+        string $userUuid,
         Unit $listedUnit,
         CarbonInterface $checkIn,
         CarbonInterface $checkOut,
-        array $excludeUnitIds,
+        array $excludeUnitUuids,
     ): ?Unit {
-        $exclude = array_flip(array_map(intval(...), $excludeUnitIds));
+        $exclude = array_flip(array_map(static fn (string $uuid): string => (string) $uuid, $excludeUnitUuids));
 
-        $try = function (Unit $candidate) use ($userId, $checkIn, $checkOut, $exclude): ?Unit {
-            $id = (int) $candidate->id;
-            if (isset($exclude[$id])) {
+        $try = function (Unit $candidate) use ($userUuid, $checkIn, $checkOut, $exclude): ?Unit {
+            $uuid = $candidate->uuid;
+            if (isset($exclude[(string) $uuid])) {
                 return null;
             }
-            if (! self::guestPortalStayIsUnavailable($userId, $id, $checkIn, $checkOut)) {
+            if (! self::guestPortalStayIsUnavailable($userUuid, (string) $uuid, $checkIn, $checkOut)) {
                 return $candidate;
             }
 
@@ -131,14 +131,14 @@ final class BookingStayConflict
             return $first;
         }
 
-        if ($listedUnit->property_id === null) {
+        if ($listedUnit->property_uuid === null) {
             return null;
         }
 
         $candidates = Unit::query()
-            ->where('user_id', $userId)
+            ->where('user_uuid', $userUuid)
             ->where('status', 'active')
-            ->where('property_id', $listedUnit->property_id)
+            ->where('property_uuid', $listedUnit->property_uuid)
             ->where('max_guests', $listedUnit->max_guests)
             ->where('bedrooms', $listedUnit->bedrooms)
             ->where('beds', $listedUnit->beds)
@@ -149,7 +149,7 @@ final class BookingStayConflict
                     $q->where('type', $listedUnit->type);
                 }
             })
-            ->orderBy('id')
+            ->orderByDesc('created_at')
             ->get();
 
         foreach ($candidates as $candidate) {
@@ -169,7 +169,7 @@ final class BookingStayConflict
      * @return list<Unit>
      */
     public static function resolveDirectPortalBookUnits(
-        int $userId,
+        string $userUuid,
         Unit $listedUnit,
         CarbonInterface $checkIn,
         CarbonInterface $checkOut,
@@ -178,19 +178,19 @@ final class BookingStayConflict
         if ($unitCount < 1 || $unitCount > self::MAX_PORTAL_UNITS_PER_BOOKING) {
             return [];
         }
-        if ($listedUnit->property_id === null && $unitCount > 1) {
+        if ($listedUnit->property_uuid === null && $unitCount > 1) {
             return [];
         }
 
         $exclude = [];
         $out = [];
         for ($i = 0; $i < $unitCount; $i++) {
-            $next = self::resolveDirectPortalUnitExcluding($userId, $listedUnit, $checkIn, $checkOut, $exclude);
+            $next = self::resolveDirectPortalUnitExcluding($userUuid, $listedUnit, $checkIn, $checkOut, $exclude);
             if ($next === null) {
                 break;
             }
             $out[] = $next;
-            $exclude[] = (int) $next->id;
+            $exclude[] = $next->uuid;
         }
 
         return $out;
