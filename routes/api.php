@@ -1,25 +1,25 @@
 <?php
 
-use App\Http\Controllers\Api\v1\AnalyticsController;
-use App\Http\Controllers\Api\v1\AuthController;
-use App\Http\Controllers\Api\v1\BookingController;
-use App\Http\Controllers\Api\v1\BookingPaymentController;
-use App\Http\Controllers\Api\v1\BookingPortalController;
-use App\Http\Controllers\Api\v1\CalendarController;
-use App\Http\Controllers\Api\v1\DashboardController;
-use App\Http\Controllers\Api\v1\PublicDirectPortalBookingController;
-use App\Http\Controllers\Api\v1\PublicDirectPortalCalendarController;
-use App\Http\Controllers\Api\v1\PublicDirectPortalController;
-use App\Http\Controllers\Api\v1\PublicDirectPortalQuoteController;
-use App\Http\Controllers\Api\v1\PromoCodeController;
-use App\Http\Controllers\Api\v1\UnitDateBlockController;
-use App\Http\Controllers\Api\v1\UnitDiscountController;
-use App\Http\Controllers\Api\v1\Configuration\NotificationSettingsController;
-use App\Http\Controllers\Api\v1\Configuration\PropertyController;
-use App\Http\Controllers\Api\v1\Configuration\TeamMemberController;
-use App\Http\Controllers\Api\v1\Configuration\UnitController;
-use App\Http\Controllers\Api\v1\Configuration\UnitRateIntervalController;
-use App\Http\Controllers\Api\v1\HealthController;
+use App\Http\Controllers\Api\V1\AnalyticsController;
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\BookingPaymentController;
+use App\Http\Controllers\Api\V1\BookingPortalController;
+use App\Http\Controllers\Api\V1\CalendarController;
+use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\PublicDirectPortalBookingController;
+use App\Http\Controllers\Api\V1\PublicDirectPortalCalendarController;
+use App\Http\Controllers\Api\V1\PublicDirectPortalController;
+use App\Http\Controllers\Api\V1\PublicDirectPortalQuoteController;
+use App\Http\Controllers\Api\V1\PromoCodeController;
+use App\Http\Controllers\Api\V1\UnitDateBlockController;
+use App\Http\Controllers\Api\V1\UnitDiscountController;
+use App\Http\Controllers\Api\V1\Configuration\NotificationSettingsController;
+use App\Http\Controllers\Api\V1\Configuration\PropertyController;
+use App\Http\Controllers\Api\V1\Configuration\TeamMemberController;
+use App\Http\Controllers\Api\V1\Configuration\UnitController;
+use App\Http\Controllers\Api\V1\Configuration\UnitRateIntervalController;
+use App\Http\Controllers\Api\V1\HealthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function (): \Illuminate\Http\JsonResponse {

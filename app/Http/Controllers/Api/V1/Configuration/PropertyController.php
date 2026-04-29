@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\v1\Configuration;
+namespace App\Http\Controllers\Api\V1\Configuration;
 
 use App\Exceptions\NoPropertyFoundException;
 use App\Http\Controllers\Controller;
